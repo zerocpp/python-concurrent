@@ -3,6 +3,7 @@ import redis
 import asyncio
 from queue import Queue
 from threading import Thread
+from zredis import redis_connect
 
 
 def start_loop(loop):
@@ -11,33 +12,26 @@ def start_loop(loop):
     loop.run_forever()
 
 
-async def do_sleep(x, queue):
-    print(f'do_sleep({x})')
-    await asyncio.sleep(x)
-    queue.put(f"do_sleep({x}): ok")
+# async def do_sleep(x, queue):
+#     print(f'do_sleep({x})')
+#     await asyncio.sleep(x)
+#     queue.put(f"do_sleep({x}): ok")
 
 
-def get_redis():
-    connection_pool = redis.ConnectionPool(host='172.16.6.115',
-                                           port=30379,
-                                           db=5)
-    return redis.Redis(connection_pool=connection_pool)
+async def do(task):
+    log_queue.put(f'task:{task} begin')
+    asyncio.sleep(1.5)
+    log_queue.put(f'task:{task} end')
 
 
 def consumer():
     while True:
-        _, task = rcon.brpop("queue")
-        if not task:
-            time.sleep(1)
-            continue
-        job = asyncio.wait_for(do_sleep(int(task), queue), timeout=2)
+        task = redis.brpop("queue")
+        print(f'task:{task}')
+        job = asyncio.wait_for(do, timeout=2)
         asyncio.run_coroutine_threadsafe(job, new_loop)
-
-
-async def do_task():
-    while True:
-        _, task = rcon.brpop("queue")
-        job = asyncio.wait_for()
+        # job = asyncio.wait_for(do_sleep(int(task), log_queue), timeout=2)
+        # asyncio.run_coroutine_threadsafe(job, new_loop)
 
 
 if __name__ == '__main__':
@@ -49,9 +43,9 @@ if __name__ == '__main__':
     loop_thread.setDaemon(True)
     loop_thread.start()
     # 创建redis连接
-    rcon = get_redis()
+    redis = redis_connect()
 
-    queue = Queue()
+    log_queue = Queue()
 
     # 子线程：用于消费队列消息，并实时往事件对象容器中添加新任务
     consumer_thread = Thread(target=consumer)
@@ -59,6 +53,6 @@ if __name__ == '__main__':
     consumer_thread.start()
 
     while True:
-        msg = queue.get()
+        msg = log_queue.get()
         print(f"协程运行完: {msg}")
         print("当前时间：", time.time())
